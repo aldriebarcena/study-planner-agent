@@ -1,5 +1,7 @@
+import pytest
+
 from study_planner.agent import build_agent_prompt
-from study_planner.input import build_planner_context, load_planner_input
+from study_planner.input import build_planner_context, load_planner_input, parse_planner_input
 
 
 def test_load_planner_input():
@@ -32,3 +34,8 @@ def test_build_agent_prompt():
     assert "Study for CS Midterm" in prompt
     assert "2026-10-26T14:00:00" in prompt
     assert "Deadline validation" in prompt
+
+
+def test_parse_planner_input_rejects_invalid_collection_shapes():
+    with pytest.raises(ValueError, match="'tasks' must be a list"):
+        parse_planner_input({"tasks": None, "availability": []})
