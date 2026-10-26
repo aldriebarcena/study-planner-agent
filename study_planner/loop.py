@@ -9,13 +9,14 @@ from study_planner.tools.availability import validate_availability
 from study_planner.tools.completion import validate_completion
 from study_planner.tools.deadlines import validate_deadlines
 from study_planner.tools.workload import validate_workload
+from study_planner.tools.overlap import validate_overlaps
 
 
 GenerateSchedule = Callable[[str], str]
 
 
 def validate_schedule(schedule: Schedule, tasks: list[Task], availability: list[AvailabilityBlock]) -> list[ValidationResult]:
-  return [validate_deadlines(schedule, tasks), validate_availability(schedule, availability),validate_completion(schedule, tasks)]
+  return [validate_deadlines(schedule, tasks), validate_availability(schedule, availability),validate_completion(schedule, tasks), validate_overlaps(schedule)]
 
 
 def format_validation_feedback(results: list[ValidationResult]) -> str:
