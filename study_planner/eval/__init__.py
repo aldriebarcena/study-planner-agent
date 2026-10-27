@@ -5,4 +5,5 @@ __all__ = [
     "calculate_metrics",
     "evaluate_cases",
     "load_eval_cases",
+    "evaluate,"
 ]
