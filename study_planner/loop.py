@@ -13,6 +13,7 @@ from study_planner.tools.overlap import validate_overlaps
 
 
 GenerateSchedule = Callable[[str], str]
+RecordEvent = Callable[[str], None]
 
 
 def validate_schedule(schedule: Schedule, tasks: list[Task], availability: list[AvailabilityBlock]) -> list[ValidationResult]:
@@ -34,7 +35,7 @@ def format_validation_feedback(results: list[ValidationResult]) -> str:
     return "\n".join(messages)
 
 
-def run_planning_loop(input_path: str | Path, generate: GenerateSchedule, max_iterations: int = 5) -> Schedule:
+def run_planning_loop(input_path: str | Path, generate: GenerateSchedule, max_iterations: int = 5, record_event: RecordEvent | None = None) -> Schedule:
     tasks, availability = load_planner_input(input_path)
 
     workload_result = validate_workload(
@@ -59,6 +60,8 @@ def run_planning_loop(input_path: str | Path, generate: GenerateSchedule, max_it
         try:
             schedule = parse_schedule(raw_output)
         except ValueError as exc:
+            if record_event:
+                record_event("format_failure")
             prompt = (
                 f"{initial_prompt}\n\n"
                 "Your previous response could not be parsed "
@@ -74,6 +77,11 @@ def run_planning_loop(input_path: str | Path, generate: GenerateSchedule, max_it
             tasks,
             availability,
         )
+
+        if record_event:
+            for result in validation_results:
+                if not result.valid:
+                    record_event("validator_failure")
 
         if all(
             result.valid
