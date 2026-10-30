@@ -2,13 +2,13 @@ import json
 from pathlib import Path
 from collections.abc import Callable
 from study_planner.loop import run_planning_loop
-from eval.metrics import calculate_metrics
+from study_planner.eval.metrics import calculate_metrics
 
 GenerateSchedule = Callable[[str], str]
 
 def load_eval_cases(cases_dir: str | Path | None = None) -> list[tuple[Path, dict]]:
     if cases_dir is None:
-        cases_dir = (Path(__file__).resolve().parent.parent / "eval_cases")
+        cases_dir = (Path(__file__).resolve().parents[2] / "eval_cases")
 
     cases_dir = Path(cases_dir)
     cases = []
