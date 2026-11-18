@@ -7,9 +7,7 @@ from study_planner.api.schemas import (
     PlanRequest,
     PlanSuccessResponse,
 )
-from study_planner.loop import (
-    run_planning_loop_from_data,
-)
+from study_planner.loop import run_planner
 from study_planner.model import generate_schedule
 
 app = FastAPI(
@@ -41,10 +39,11 @@ def create_plan(
     request: PlanRequest,
 ):
     try:
-        schedule = run_planning_loop_from_data(
-            request.tasks,
-            request.availability,
-            generate_schedule,
+        schedule = run_planner(
+          request.tasks,
+          request.availability,
+          generate_schedule,
+          preferences=request.preferences,
         )
 
         return PlanSuccessResponse(schedule=schedule)

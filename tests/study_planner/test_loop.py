@@ -4,9 +4,10 @@ import pytest
 
 from study_planner.input import load_planner_input
 from study_planner.loop import (
+    run_planner,
     run_planning_loop,
-    run_planning_loop_from_data,
 )
+from study_planner.schemas import SchedulingPreferences
 
 VALID_SCHEDULE = json.dumps(
     {
@@ -136,7 +137,7 @@ def test_loop_accepts_structured_input():
     def generate(prompt):
         return VALID_SCHEDULE
 
-    schedule = run_planning_loop_from_data(
+    schedule = run_planner(
         tasks,
         availability,
         generate,
@@ -160,10 +161,75 @@ def test_structured_loop_detects_infeasible_workload():
         ValueError,
         match="infeasible",
     ):
-        run_planning_loop_from_data(
+        run_planner(
             tasks,
             availability,
             generate,
         )
 
     assert not called
+
+def test_structured_loop_passes_preferences_to_prompt():
+    tasks, availability = load_planner_input(
+        "eval_cases/simple_week.json"
+    )
+
+    prompts = []
+
+    def generate(prompt):
+        prompts.append(prompt)
+        return VALID_SCHEDULE
+
+    run_planner(
+        tasks,
+        availability,
+        generate,
+        preferences=SchedulingPreferences(
+            study_period="evening",
+            session_minutes=60,
+            min_break_minutes=15,
+            spread_across_days=True,
+        ),
+    )
+
+    assert len(prompts) == 1
+    assert '"study_period": "evening"' in prompts[0]
+    assert '"session_minutes": 60' in prompts[0]
+    assert '"min_break_minutes": 15' in prompts[0]
+    assert '"spread_across_days": true' in prompts[0]
+
+def test_structured_loop_preserves_event_tracking():
+    tasks, availability = load_planner_input(
+        "eval_cases/simple_week.json"
+    )
+
+    events = []
+
+    invalid_schedule = json.dumps(
+        {
+            "blocks": [
+                {
+                    "task_id": "cs_midterm",
+                    "start": "2026-10-26T14:00:00",
+                    "end": "2026-10-26T15:00:00",
+                }
+            ]
+        }
+    )
+
+    responses = [
+        invalid_schedule,
+        VALID_SCHEDULE,
+    ]
+
+    def generate(prompt):
+        return responses.pop(0)
+
+    run_planner(
+        tasks,
+        availability,
+        generate,
+        record_event=events.append,
+    )
+
+    assert "validator_failure" in events

@@ -49,7 +49,7 @@ def run_planning_loop(
 ) -> Schedule:
     tasks, availability = load_planner_input(input_path)
 
-    return run_planning_loop_from_data(
+    return run_planner(
         tasks,
         availability,
         generate,
@@ -59,7 +59,7 @@ def run_planning_loop(
     )
 
 
-def run_planning_loop_from_data(
+def run_planner(
     tasks: list[Task],
     availability: list[AvailabilityBlock],
     generate: GenerateSchedule,

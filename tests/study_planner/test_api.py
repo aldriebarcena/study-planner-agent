@@ -141,3 +141,61 @@ def test_plan_endpoint_rejects_invalid_task():
     )
 
     assert response.status_code == 422
+
+def test_plan_endpoint_accepts_preferences(
+    monkeypatch,
+):
+    prompts = []
+
+    def generate(prompt):
+        prompts.append(prompt)
+        return VALID_SCHEDULE
+
+    monkeypatch.setattr(
+        app_module,
+        "generate_schedule",
+        generate,
+    )
+
+    request = {
+        **SIMPLE_REQUEST,
+        "preferences": {
+            "study_period": "evening",
+            "session_minutes": 60,
+            "min_break_minutes": 15,
+            "spread_across_days": True,
+        },
+    }
+
+    response = client.post(
+        "/api/plan",
+        json=request,
+    )
+
+    assert response.status_code == 200
+
+    assert '"study_period": "evening"' in prompts[0]
+    assert '"session_minutes": 60' in prompts[0]
+
+def test_plan_endpoint_uses_default_preferences(
+    monkeypatch,
+):
+    prompts = []
+
+    def generate(prompt):
+        prompts.append(prompt)
+        return VALID_SCHEDULE
+
+    monkeypatch.setattr(
+        app_module,
+        "generate_schedule",
+        generate,
+    )
+
+    response = client.post(
+        "/api/plan",
+        json=SIMPLE_REQUEST,
+    )
+
+    assert response.status_code == 200
+    assert '"study_period": "any"' in prompts[0]
