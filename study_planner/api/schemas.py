@@ -1,10 +1,11 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from study_planner.schemas import (
     AvailabilityBlock,
     Schedule,
+    SchedulingPreferences,
     Task,
 )
 
@@ -12,6 +13,9 @@ from study_planner.schemas import (
 class PlanRequest(BaseModel):
     tasks: list[Task]
     availability: list[AvailabilityBlock]
+    preferences: SchedulingPreferences = Field(
+        default_factory=SchedulingPreferences
+    )
 
 
 class PlanSuccessResponse(BaseModel):
