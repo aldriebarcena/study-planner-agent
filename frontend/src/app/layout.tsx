@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Studyspace | Build your study plan",
-  description: "Add study tasks and availability to shape a plan that works for you.",
+  title: "Study Planner",
+  description: "Organize your study tasks, availability, and weekly schedule.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
