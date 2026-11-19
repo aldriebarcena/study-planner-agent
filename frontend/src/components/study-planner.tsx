@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/icon";
+import { ScheduleOutput } from "@/components/schedule-output";
 
 type StudyTask = {
   id: string;
@@ -82,18 +83,15 @@ export function StudyPlanner() {
   return (
     <div className="planner-app">
       <header className="planner-header">
-        <div aria-label="Studyspace" className="brand">
-          <span className="brand-mark"><Icon name="sparkle" size={19} /></span>
-          <span className="brand-name">study<span>space</span></span>
+        <div className="brand">
+          <span className="brand-name">Study Planner</span>
         </div>
-        <span className="local-preview"><span /> Your plan stays on this page</span>
       </header>
 
       <main className="planner-main">
         <section aria-labelledby="welcome-title" className="planner-hero">
-          <p className="eyebrow"><Icon name="sun" size={15} /> YOUR STUDY WEEK, AT YOUR PACE</p>
-          <h1 id="welcome-title">Make room for <em>what matters.</em></h1>
-          <p className="planner-intro">Add what you need to do and when you&apos;re free. Your plan takes shape as you go.</p>
+          <h1 id="welcome-title">Plan your study week.</h1>
+          <p className="planner-intro">Add your study tasks and available times to build a weekly schedule.</p>
         </section>
 
         <div className="planner-layout">
@@ -260,13 +258,12 @@ export function StudyPlanner() {
                 <p className="preview-empty">Your open time blocks will appear here.</p>
               )}
             </section>
-
-            <p className="preview-note"><Icon name="sparkle" size={15} /> A good plan leaves room to breathe.</p>
           </section>
         </div>
 
+        <ScheduleOutput />
+
         <footer className="planner-footer">
-          <span><Icon name="sparkle" size={14} /> Made for steady progress, not perfection.</span>
           <span>Nothing is sent to a server.</span>
         </footer>
       </main>
