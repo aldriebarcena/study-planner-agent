@@ -950,23 +950,6 @@ select:focus-visible {
   font-size: 9px;
 }
 
-.schedule-demo-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 18px 0 0;
-  padding-top: 13px;
-  border-top: 1px solid #edf0ec;
-  color: #87958a;
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.schedule-demo-note svg {
-  flex: 0 0 auto;
-  color: #77937d;
-}
-
 .schedule-state {
   display: flex;
   min-height: 260px;
@@ -1005,11 +988,6 @@ select:focus-visible {
   color: #6c896f;
 }
 
-.schedule-state-detail {
-  margin-top: 15px !important;
-  font-size: 10px !important;
-}
-
 .schedule-spinner {
   width: 34px;
   height: 34px;
@@ -1022,33 +1000,6 @@ select:focus-visible {
 @keyframes schedule-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-.schedule-progress {
-  width: min(280px, 90%);
-  height: 5px;
-  overflow: hidden;
-  margin: 20px 0 12px;
-  border-radius: 10px;
-  background: #e8eee7;
-}
-
-.schedule-progress span {
-  display: block;
-  width: 65%;
-  height: 100%;
-  border-radius: inherit;
-  background: #78977c;
-  animation: schedule-progress 1.8s ease-in-out infinite alternate;
-}
-
-@keyframes schedule-progress {
-  from {
-    width: 25%;
-  }
-  to {
-    width: 85%;
   }
 }
 

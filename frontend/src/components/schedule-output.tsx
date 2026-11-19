@@ -148,9 +148,6 @@ export function ScheduleOutput() {
             Finding time for your tasks and checking your
             availability.
           </p>
-          <div className="schedule-progress">
-            <span />
-          </div>
         </div>
       );
     }
