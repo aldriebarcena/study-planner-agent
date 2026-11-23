@@ -4,25 +4,52 @@ import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/icon";
 import { ScheduleOutput } from "@/components/schedule-output";
 
-type StudyTask = {
+export type PlannerTask = {
   id: string;
-  title: string;
-  minutes: number;
+  name: string;
+  course: string | null;
+  deadline: string;
+  estimated_minutes: number;
+  priority: number;
 };
 
-type AvailabilityBlock = {
-  id: string;
-  day: string;
+export type PlannerAvailability = {
   start: string;
   end: string;
 };
 
-const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+type AvailabilityBlock = PlannerAvailability & {
+  id: string;
+};
+
+export type PlannerInput = {
+  tasks: PlannerTask[];
+  availability: PlannerAvailability[];
+};
 
 function formatDuration(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return [hours ? `${hours}h` : "", remainingMinutes ? `${remainingMinutes}m` : ""].filter(Boolean).join(" ");
+}
+
+function formatDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(dateTime: string) {
+  return new Date(dateTime).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function formatTime(time: string) {
@@ -31,54 +58,182 @@ function formatTime(time: string) {
   return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
-export function StudyPlanner() {
-  const [tasks, setTasks] = useState<StudyTask[]>([]);
+function toApiDateTime(date: string, time: string) {
+  return `${date}T${time}:00`;
+}
+
+function formatAvailabilityDates(start: string, end: string) {
+  const startDate = start.slice(0, 10);
+  const endDate = end.slice(0, 10);
+  return startDate === endDate
+    ? formatDate(startDate)
+    : `${formatDate(startDate)} – ${formatDate(endDate)}`;
+}
+
+export function StudyPlanner({
+  onSubmit,
+}: {
+  onSubmit?: (input: PlannerInput) => void;
+}) {
+  const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [availability, setAvailability] = useState<AvailabilityBlock[]>([]);
-  const [taskTitle, setTaskTitle] = useState("");
+  const [taskName, setTaskName] = useState("");
+  const [taskCourse, setTaskCourse] = useState("");
+  const [taskDeadline, setTaskDeadline] = useState("");
   const [taskMinutes, setTaskMinutes] = useState("60");
+  const [taskPriority, setTaskPriority] = useState("");
   const [taskError, setTaskError] = useState("");
-  const [availabilityDay, setAvailabilityDay] = useState("Monday");
+  const [availabilityStartDate, setAvailabilityStartDate] = useState("");
+  const [availabilityEndDate, setAvailabilityEndDate] = useState("");
   const [availabilityStart, setAvailabilityStart] = useState("09:00");
   const [availabilityEnd, setAvailabilityEnd] = useState("11:00");
   const [availabilityError, setAvailabilityError] = useState("");
+  const [editingAvailabilityId, setEditingAvailabilityId] = useState<string | null>(null);
+  const [plannerError, setPlannerError] = useState("");
+  const [submittedInput, setSubmittedInput] = useState<PlannerInput | null>(null);
 
   function addTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const title = taskTitle.trim();
+    const name = taskName.trim();
     const minutes = Number(taskMinutes);
+    const priority = Number(taskPriority);
 
-    if (!title) {
+    if (!name) {
       setTaskError("Add a task name to continue.");
       return;
     }
+    if (!Number.isSafeInteger(minutes) || minutes < 1) {
+      setTaskError("Estimated study time must be a whole number greater than zero.");
+      return;
+    }
+    if (!taskDeadline || !Number.isFinite(new Date(taskDeadline).getTime())) {
+      setTaskError("Enter a valid deadline.");
+      return;
+    }
+    if (new Date(taskDeadline).getTime() <= Date.now()) {
+      setTaskError("Deadline must be in the future.");
+      return;
+    }
+    if (![1, 2, 3].includes(priority)) {
+      setTaskError("Choose a priority from 1 (low) to 3 (high).");
+      return;
+    }
 
-    setTasks((current) => [...current, { id: crypto.randomUUID(), title, minutes }]);
-    setTaskTitle("");
+    setTasks((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        name,
+        course: taskCourse.trim() || null,
+        deadline: `${taskDeadline}:00`,
+        estimated_minutes: minutes,
+        priority,
+      },
+    ]);
+    setTaskName("");
+    setTaskCourse("");
+    setTaskDeadline("");
     setTaskMinutes("60");
+    setTaskPriority("");
     setTaskError("");
+    setPlannerError("");
+    setSubmittedInput(null);
   }
 
   function addAvailability(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (availabilityEnd <= availabilityStart) {
-      setAvailabilityError("End time must be after start time.");
+    if (!availabilityStartDate || !availabilityEndDate || !availabilityStart || !availabilityEnd) {
+      setAvailabilityError("Choose a start date and time, and an end date and time.");
+      return;
+    }
+    const startDateTime = new Date(`${availabilityStartDate}T${availabilityStart}`).getTime();
+    const endDateTime = new Date(`${availabilityEndDate}T${availabilityEnd}`).getTime();
+    if (!Number.isFinite(startDateTime) || !Number.isFinite(endDateTime)) {
+      setAvailabilityError("Enter valid start and end dates and times.");
+      return;
+    }
+    if (startDateTime <= Date.now()) {
+      setAvailabilityError("Availability must start in the future.");
+      return;
+    }
+    if (endDateTime <= startDateTime) {
+      setAvailabilityError("The end date and time must be after the start.");
       return;
     }
 
-    setAvailability((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        day: availabilityDay,
-        start: availabilityStart,
-        end: availabilityEnd,
-      },
-    ]);
+    const start = toApiDateTime(availabilityStartDate, availabilityStart);
+    const end = toApiDateTime(availabilityEndDate, availabilityEnd);
+    const overlaps = availability.some(
+      (window) =>
+        window.id !== editingAvailabilityId &&
+        start < window.end &&
+        end > window.start,
+    );
+    if (overlaps) {
+      setAvailabilityError("This window overlaps another availability window.");
+      return;
+    }
+
+    const window = {
+      id: editingAvailabilityId ?? crypto.randomUUID(),
+      start,
+      end,
+    };
+    setAvailability((current) =>
+      editingAvailabilityId
+        ? current.map((item) => (item.id === editingAvailabilityId ? window : item))
+        : [...current, window],
+    );
+    setEditingAvailabilityId(null);
+    setAvailabilityError("");
+    setPlannerError("");
+    setSubmittedInput(null);
+  }
+
+  function editAvailability(window: AvailabilityBlock) {
+    setEditingAvailabilityId(window.id);
+    setAvailabilityStartDate(window.start.slice(0, 10));
+    setAvailabilityEndDate(window.end.slice(0, 10));
+    setAvailabilityStart(window.start.slice(11, 16));
+    setAvailabilityEnd(window.end.slice(11, 16));
+    setAvailabilityError("");
+    setSubmittedInput(null);
+  }
+
+  function cancelAvailabilityEdit() {
+    setEditingAvailabilityId(null);
+    setAvailabilityStartDate("");
+    setAvailabilityEndDate("");
+    setAvailabilityStart("09:00");
+    setAvailabilityEnd("11:00");
     setAvailabilityError("");
   }
 
-  const plannedMinutes = tasks.reduce((total, task) => total + task.minutes, 0);
+  function submitPlanner(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tasks.length || !availability.length) {
+      setPlannerError("Add at least one task and one availability window to continue.");
+      return;
+    }
+
+    const input: PlannerInput = {
+      tasks: tasks.map(({ id, name, course, deadline, estimated_minutes, priority }) => ({
+        id,
+        name,
+        course,
+        deadline,
+        estimated_minutes,
+        priority,
+      })),
+      availability: availability.map(({ start, end }) => ({ start, end })),
+    };
+    onSubmit?.(input);
+    setSubmittedInput(input);
+    setPlannerError("");
+  }
+
+  const plannedMinutes = tasks.reduce((total, task) => total + task.estimated_minutes, 0);
 
   return (
     <div className="planner-app">
@@ -115,52 +270,112 @@ export function StudyPlanner() {
                   autoComplete="off"
                   className="planner-input"
                   onChange={(event) => {
-                    setTaskTitle(event.target.value);
+                    setTaskName(event.target.value);
                     setTaskError("");
                   }}
                   placeholder="e.g. Review biology lecture notes"
                   required
-                  value={taskTitle}
+                  value={taskName}
                 />
               </label>
-              <div className="planner-form-row">
+              <div className="task-details-grid">
                 <label className="planner-field">
-                  <span>Estimated time</span>
+                  <span>Course <span className="field-optional">(optional)</span></span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => setTaskCourse(event.target.value)}
+                    placeholder="e.g. BIOL 005"
+                    value={taskCourse}
+                  />
+                </label>
+                <label className="planner-field">
+                  <span>Deadline</span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => {
+                      setTaskDeadline(event.target.value);
+                      setTaskError("");
+                    }}
+                    required
+                    type="datetime-local"
+                    value={taskDeadline}
+                  />
+                </label>
+                <label className="planner-field">
+                  <span>Estimated study time</span>
                   <div className="planner-input-wrap">
                     <input
                       className="planner-input"
                       min="1"
-                      onChange={(event) => setTaskMinutes(event.target.value)}
+                      onChange={(event) => {
+                        setTaskMinutes(event.target.value);
+                        setTaskError("");
+                      }}
                       required
+                      step="1"
                       type="number"
                       value={taskMinutes}
                     />
                     <span className="input-suffix">minutes</span>
                   </div>
                 </label>
+                <label className="planner-field">
+                  <span>Priority</span>
+                  <select
+                    className="planner-input"
+                    onChange={(event) => setTaskPriority(event.target.value)}
+                    required
+                    value={taskPriority}
+                  >
+                    <option disabled value="">Select priority</option>
+                    <option value="1">1 · Low</option>
+                    <option value="2">2 · Medium</option>
+                    <option value="3">3 · High</option>
+                  </select>
+                </label>
+              </div>
+              <div className="task-submit-row">
+                {taskError && <p className="planner-error" role="alert">{taskError}</p>}
                 <button className="planner-button" type="submit"><Icon name="plus" size={17} /> Add task</button>
               </div>
-              {taskError && <p className="planner-error" role="alert">{taskError}</p>}
             </form>
 
             <form className="planner-form-section availability-form" onSubmit={addAvailability}>
               <div className="planner-section-heading">
                 <span className="planner-step">02</span>
-                <div><h3>Set your availability</h3><p>Choose a day and an open time block.</p></div>
+                <div><h3>Set your availability</h3><p>Choose the start and end of an open time window.</p></div>
               </div>
-              <label className="planner-field">
-                <span>Day</span>
-                <select
-                  className="planner-input"
-                  onChange={(event) => setAvailabilityDay(event.target.value)}
-                  value={availabilityDay}
-                >
-                  {weekdays.map((day) => <option key={day}>{day}</option>)}
-                </select>
-              </label>
+              <div className="planner-form-row availability-date-row">
+                <label className="planner-field">
+                  <span>Start date</span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => {
+                      setAvailabilityStartDate(event.target.value);
+                      setAvailabilityError("");
+                    }}
+                    required
+                    type="date"
+                    value={availabilityStartDate}
+                  />
+                </label>
+                <label className="planner-field">
+                  <span>End date</span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => {
+                      setAvailabilityEndDate(event.target.value);
+                      setAvailabilityError("");
+                    }}
+                    required
+                    type="date"
+                    value={availabilityEndDate}
+                  />
+                </label>
+              </div>
               <div className="planner-form-row time-row">
                 <label className="planner-field">
-                  <span>Starts</span>
+                  <span>Start time</span>
                   <input
                     className="planner-input"
                     onChange={(event) => {
@@ -173,7 +388,7 @@ export function StudyPlanner() {
                   />
                 </label>
                 <label className="planner-field">
-                  <span>Ends</span>
+                  <span>End time</span>
                   <input
                     className="planner-input"
                     onChange={(event) => {
@@ -185,9 +400,16 @@ export function StudyPlanner() {
                     value={availabilityEnd}
                   />
                 </label>
-                <button className="planner-button" type="submit"><Icon name="plus" size={17} /> Add time</button>
+                <button className="planner-button" type="submit">
+                  <Icon name="plus" size={17} /> {editingAvailabilityId ? "Save window" : "Add window"}
+                </button>
               </div>
               {availabilityError && <p className="planner-error" role="alert">{availabilityError}</p>}
+              {editingAvailabilityId && (
+                <button className="cancel-edit-button" onClick={cancelAvailabilityEdit} type="button">
+                  Cancel editing
+                </button>
+              )}
             </form>
           </section>
 
@@ -203,7 +425,7 @@ export function StudyPlanner() {
             <div className="plan-summary">
               <div><strong>{tasks.length}</strong><span>{tasks.length === 1 ? "task" : "tasks"}</span></div>
               <span className="summary-divider" />
-              <div><strong>{availability.length}</strong><span>{availability.length === 1 ? "time block" : "time blocks"}</span></div>
+              <div><strong>{availability.length}</strong><span>{availability.length === 1 ? "time window" : "time windows"}</span></div>
               {plannedMinutes > 0 && <span className="summary-total">{formatDuration(plannedMinutes)} of study</span>}
             </div>
 
@@ -217,12 +439,18 @@ export function StudyPlanner() {
                   {tasks.map((task) => (
                     <li className="preview-item" key={task.id}>
                       <span className="preview-item-mark"><Icon name="check" size={14} /></span>
-                      <span className="preview-item-title">{task.title}</span>
-                      <span className="preview-item-detail">{formatDuration(task.minutes)}</span>
+                      <span className="preview-item-title">
+                        <strong>{task.name}</strong>
+                        <small>{task.course || "No course"} · Priority {task.priority} · Due {formatDateTime(task.deadline)}</small>
+                      </span>
+                      <span className="preview-item-detail">{formatDuration(task.estimated_minutes)}</span>
                       <button
-                        aria-label={`Remove ${task.title}`}
+                        aria-label={`Remove ${task.name}`}
                         className="remove-item"
-                        onClick={() => setTasks((current) => current.filter((item) => item.id !== task.id))}
+                        onClick={() => {
+                          setTasks((current) => current.filter((item) => item.id !== task.id));
+                          setSubmittedInput(null);
+                        }}
                         type="button"
                       >Remove</button>
                     </li>
@@ -240,31 +468,59 @@ export function StudyPlanner() {
               </header>
               {availability.length ? (
                 <ul className="preview-list">
-                  {availability.map((block) => (
-                    <li className="preview-item availability-item" key={block.id}>
-                      <span className="availability-day">{block.day.slice(0, 3)}</span>
-                      <span className="preview-item-title">{block.day}</span>
-                      <span className="preview-item-detail">{formatTime(block.start)} – {formatTime(block.end)}</span>
+                  {availability.map((window) => (
+                    <li className="preview-item availability-item" key={window.id}>
+                      <span className="availability-day"><Icon name="calendar" size={13} /></span>
+                      <span className="preview-item-title">
+                        <strong>{formatAvailabilityDates(window.start, window.end)}</strong>
+                        <small>{formatTime(window.start.slice(11, 16))} – {formatTime(window.end.slice(11, 16))}</small>
+                      </span>
                       <button
-                        aria-label={`Remove ${block.day} availability`}
+                        aria-label={`Edit availability ${formatAvailabilityDates(window.start, window.end)}`}
                         className="remove-item"
-                        onClick={() => setAvailability((current) => current.filter((item) => item.id !== block.id))}
+                        onClick={() => editAvailability(window)}
+                        type="button"
+                      >Edit</button>
+                      <button
+                        aria-label={`Remove availability ${formatAvailabilityDates(window.start, window.end)}`}
+                        className="remove-item"
+                        onClick={() => {
+                          setAvailability((current) => current.filter((item) => item.id !== window.id));
+                          if (editingAvailabilityId === window.id) cancelAvailabilityEdit();
+                          setSubmittedInput(null);
+                        }}
                         type="button"
                       >Remove</button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="preview-empty">Your open time blocks will appear here.</p>
+                <p className="preview-empty">Your open time windows will appear here.</p>
               )}
             </section>
           </section>
         </div>
 
+        <form className="planner-submit-section" onSubmit={submitPlanner}>
+          {plannerError && <p className="planner-error" role="alert">{plannerError}</p>}
+          <button className="planner-button planner-submit-button" type="submit">
+            Prepare planner input
+          </button>
+          {submittedInput && (
+            <div aria-live="polite" className="submitted-input">
+              <p>Planner input is ready.</p>
+              <details>
+                <summary>View Phase 1 request data</summary>
+                <pre>{JSON.stringify(submittedInput, null, 2)}</pre>
+              </details>
+            </div>
+          )}
+        </form>
+
         <ScheduleOutput />
 
         <footer className="planner-footer">
-          <span>Nothing is sent to a server.</span>
+          <span>This form prepares planner input without making API requests.</span>
         </footer>
       </main>
     </div>

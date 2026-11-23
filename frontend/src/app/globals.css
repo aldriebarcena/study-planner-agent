@@ -298,6 +298,29 @@ select:focus-visible {
   gap: 12px;
 }
 
+.task-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.task-submit-row {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.task-submit-row .planner-error {
+  margin: 0 auto 0 0;
+}
+
+.field-optional {
+  color: #929e95;
+  font-weight: 450;
+}
+
 .planner-input-wrap {
   position: relative;
 }
@@ -343,10 +366,84 @@ select:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 
+.availability-date-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .planner-error {
   margin: -5px 0 0;
   color: var(--danger);
   font-size: 11px;
+}
+
+.cancel-edit-button {
+  justify-self: start;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #78867d;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.cancel-edit-button:hover {
+  color: var(--danger);
+}
+
+.planner-submit-section {
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.planner-submit-section > .planner-error {
+  margin: 0;
+}
+
+.planner-submit-button {
+  min-width: 190px;
+  min-height: 46px;
+  font-size: 12px;
+}
+
+.submitted-input {
+  width: min(100%, 680px);
+  color: #617267;
+  font-size: 11px;
+}
+
+.submitted-input p {
+  margin: 2px 0 9px;
+  text-align: center;
+}
+
+.submitted-input details {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.submitted-input summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.submitted-input pre {
+  max-height: 280px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f7f9f6;
+  color: #42584a;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .preview-card {
@@ -486,10 +583,26 @@ select:focus-visible {
 }
 
 .preview-item-title {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
   overflow: hidden;
   color: #52635a;
   font-size: 11px;
   text-overflow: ellipsis;
+}
+
+.preview-item-title strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+}
+
+.preview-item-title small {
+  color: #929e95;
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .preview-item-detail {
@@ -622,6 +735,14 @@ select:focus-visible {
     padding: 17px 0;
   }
 
+  .task-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-submit-row {
+    align-items: flex-end;
+  }
+
   .planner-footer {
     flex-direction: column;
     padding-top: 22px;
@@ -645,6 +766,10 @@ select:focus-visible {
 
   .time-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .availability-date-row {
+    grid-template-columns: 1fr;
   }
 
   .time-row .planner-button {
