@@ -20,7 +20,6 @@ export type PlannerAvailability = {
 
 type AvailabilityBlock = PlannerAvailability & {
   id: string;
-  date: string;
 };
 
 export type PlannerInput = {
@@ -63,6 +62,14 @@ function toApiDateTime(date: string, time: string) {
   return `${date}T${time}:00`;
 }
 
+function formatAvailabilityDates(start: string, end: string) {
+  const startDate = start.slice(0, 10);
+  const endDate = end.slice(0, 10);
+  return startDate === endDate
+    ? formatDate(startDate)
+    : `${formatDate(startDate)} – ${formatDate(endDate)}`;
+}
+
 export function StudyPlanner({
   onSubmit,
 }: {
@@ -76,7 +83,8 @@ export function StudyPlanner({
   const [taskMinutes, setTaskMinutes] = useState("60");
   const [taskPriority, setTaskPriority] = useState("");
   const [taskError, setTaskError] = useState("");
-  const [availabilityDate, setAvailabilityDate] = useState("");
+  const [availabilityStartDate, setAvailabilityStartDate] = useState("");
+  const [availabilityEndDate, setAvailabilityEndDate] = useState("");
   const [availabilityStart, setAvailabilityStart] = useState("09:00");
   const [availabilityEnd, setAvailabilityEnd] = useState("11:00");
   const [availabilityError, setAvailabilityError] = useState("");
@@ -135,40 +143,40 @@ export function StudyPlanner({
   function addAvailability(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!availabilityDate || !availabilityStart || !availabilityEnd) {
-      setAvailabilityError("Choose a date, start time, and end time.");
+    if (!availabilityStartDate || !availabilityEndDate || !availabilityStart || !availabilityEnd) {
+      setAvailabilityError("Choose a start date and time, and an end date and time.");
       return;
     }
-    if (!Number.isFinite(new Date(`${availabilityDate}T${availabilityStart}`).getTime())) {
-      setAvailabilityError("Enter a valid date and time.");
+    const startDateTime = new Date(`${availabilityStartDate}T${availabilityStart}`).getTime();
+    const endDateTime = new Date(`${availabilityEndDate}T${availabilityEnd}`).getTime();
+    if (!Number.isFinite(startDateTime) || !Number.isFinite(endDateTime)) {
+      setAvailabilityError("Enter valid start and end dates and times.");
       return;
     }
-    if (new Date(`${availabilityDate}T${availabilityStart}`).getTime() <= Date.now()) {
+    if (startDateTime <= Date.now()) {
       setAvailabilityError("Availability must start in the future.");
       return;
     }
-    if (availabilityEnd <= availabilityStart) {
-      setAvailabilityError("End time must be after start time.");
+    if (endDateTime <= startDateTime) {
+      setAvailabilityError("The end date and time must be after the start.");
       return;
     }
 
-    const start = toApiDateTime(availabilityDate, availabilityStart);
-    const end = toApiDateTime(availabilityDate, availabilityEnd);
+    const start = toApiDateTime(availabilityStartDate, availabilityStart);
+    const end = toApiDateTime(availabilityEndDate, availabilityEnd);
     const overlaps = availability.some(
       (window) =>
         window.id !== editingAvailabilityId &&
-        window.date === availabilityDate &&
         start < window.end &&
         end > window.start,
     );
     if (overlaps) {
-      setAvailabilityError("This window overlaps another availability window on that date.");
+      setAvailabilityError("This window overlaps another availability window.");
       return;
     }
 
     const window = {
       id: editingAvailabilityId ?? crypto.randomUUID(),
-      date: availabilityDate,
       start,
       end,
     };
@@ -185,7 +193,8 @@ export function StudyPlanner({
 
   function editAvailability(window: AvailabilityBlock) {
     setEditingAvailabilityId(window.id);
-    setAvailabilityDate(window.date);
+    setAvailabilityStartDate(window.start.slice(0, 10));
+    setAvailabilityEndDate(window.end.slice(0, 10));
     setAvailabilityStart(window.start.slice(11, 16));
     setAvailabilityEnd(window.end.slice(11, 16));
     setAvailabilityError("");
@@ -194,7 +203,8 @@ export function StudyPlanner({
 
   function cancelAvailabilityEdit() {
     setEditingAvailabilityId(null);
-    setAvailabilityDate("");
+    setAvailabilityStartDate("");
+    setAvailabilityEndDate("");
     setAvailabilityStart("09:00");
     setAvailabilityEnd("11:00");
     setAvailabilityError("");
@@ -333,24 +343,39 @@ export function StudyPlanner({
             <form className="planner-form-section availability-form" onSubmit={addAvailability}>
               <div className="planner-section-heading">
                 <span className="planner-step">02</span>
-                <div><h3>Set your availability</h3><p>Choose a date and an open time window.</p></div>
+                <div><h3>Set your availability</h3><p>Choose the start and end of an open time window.</p></div>
               </div>
-              <label className="planner-field">
-                <span>Date</span>
-                <input
-                  className="planner-input"
-                  onChange={(event) => {
-                    setAvailabilityDate(event.target.value);
-                    setAvailabilityError("");
-                  }}
-                  required
-                  type="date"
-                  value={availabilityDate}
-                />
-              </label>
+              <div className="planner-form-row availability-date-row">
+                <label className="planner-field">
+                  <span>Start date</span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => {
+                      setAvailabilityStartDate(event.target.value);
+                      setAvailabilityError("");
+                    }}
+                    required
+                    type="date"
+                    value={availabilityStartDate}
+                  />
+                </label>
+                <label className="planner-field">
+                  <span>End date</span>
+                  <input
+                    className="planner-input"
+                    onChange={(event) => {
+                      setAvailabilityEndDate(event.target.value);
+                      setAvailabilityError("");
+                    }}
+                    required
+                    type="date"
+                    value={availabilityEndDate}
+                  />
+                </label>
+              </div>
               <div className="planner-form-row time-row">
                 <label className="planner-field">
-                  <span>Starts</span>
+                  <span>Start time</span>
                   <input
                     className="planner-input"
                     onChange={(event) => {
@@ -363,7 +388,7 @@ export function StudyPlanner({
                   />
                 </label>
                 <label className="planner-field">
-                  <span>Ends</span>
+                  <span>End time</span>
                   <input
                     className="planner-input"
                     onChange={(event) => {
@@ -447,17 +472,17 @@ export function StudyPlanner({
                     <li className="preview-item availability-item" key={window.id}>
                       <span className="availability-day"><Icon name="calendar" size={13} /></span>
                       <span className="preview-item-title">
-                        <strong>{formatDate(window.date)}</strong>
+                        <strong>{formatAvailabilityDates(window.start, window.end)}</strong>
                         <small>{formatTime(window.start.slice(11, 16))} – {formatTime(window.end.slice(11, 16))}</small>
                       </span>
                       <button
-                        aria-label={`Edit availability on ${formatDate(window.date)}`}
+                        aria-label={`Edit availability ${formatAvailabilityDates(window.start, window.end)}`}
                         className="remove-item"
                         onClick={() => editAvailability(window)}
                         type="button"
                       >Edit</button>
                       <button
-                        aria-label={`Remove availability on ${formatDate(window.date)}`}
+                        aria-label={`Remove availability ${formatAvailabilityDates(window.start, window.end)}`}
                         className="remove-item"
                         onClick={() => {
                           setAvailability((current) => current.filter((item) => item.id !== window.id));
