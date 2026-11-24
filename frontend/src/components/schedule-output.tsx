@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
+import type { PlannerSchedule, PlannerTask } from "@/planner-types";
 
 type PreviewState = "success" | "loading" | "empty" | "infeasible" | "error";
 
@@ -12,10 +13,11 @@ type StudySession = {
   end: string;
 };
 
-type StudyTask = {
-  name: string;
-  course: string;
-  color: string;
+type ScheduleOutputProps = {
+  state: PreviewState;
+  schedule: PlannerSchedule | null;
+  tasks: PlannerTask[];
+  message: string;
 };
 
 const weekdays = [
@@ -28,59 +30,7 @@ const weekdays = [
   "Sunday",
 ];
 
-const weekStart = new Date(2026, 10, 16);
-
-const tasks: Record<string, StudyTask> = {
-  cs_midterm: {
-    name: "Study for CS Midterm",
-    course: "CS 166",
-    color: "#dceafa",
-  },
-  math_midterm: {
-    name: "Study for Math Midterm",
-    course: "MATH 031",
-    color: "#fce4d6",
-  },
-  biology_quiz: {
-    name: "Prepare for Biology Quiz",
-    course: "BIOL 005",
-    color: "#e4f1df",
-  },
-};
-
-const mockSessions: StudySession[] = [
-  {
-    id: "1",
-    taskId: "cs_midterm",
-    start: "2026-11-16T09:00:00",
-    end: "2026-11-16T11:00:00",
-  },
-  {
-    id: "2",
-    taskId: "math_midterm",
-    start: "2026-11-16T13:00:00",
-    end: "2026-11-16T14:30:00",
-  },
-  {
-    id: "3",
-    taskId: "cs_midterm",
-    start: "2026-11-17T10:00:00",
-    end: "2026-11-17T11:00:00",
-  },
-  {
-    id: "4",
-    taskId: "biology_quiz",
-    start: "2026-11-18T14:00:00",
-    end: "2026-11-18T16:00:00",
-  },
-  {
-    id: "5",
-    taskId: "math_midterm",
-    start: "2026-11-19T09:00:00",
-    end: "2026-11-19T10:30:00",
-  },
-];
-
+const taskColors = ["#dceafa", "#fce4d6", "#e4f1df", "#ede0f5", "#f7e9c9"];
 const startHour = 8;
 const endHour = 20;
 const hourHeight = 48;
@@ -102,10 +52,7 @@ function formatDuration(start: Date, end: Date) {
   return `${remainingMinutes}m`;
 }
 
-export function ScheduleOutput() {
-  const [previewState, setPreviewState] =
-    useState<PreviewState>("success");
-
+export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutputProps) {
   const [selectedSession, setSelectedSession] =
     useState<StudySession | null>(null);
 
@@ -123,11 +70,21 @@ export function ScheduleOutput() {
     };
   }, []);
 
-  const sessions =
-    previewState === "success" ? mockSessions : [];
-
+  const sessions: StudySession[] = (schedule?.blocks ?? [])
+    .map((block, index) => ({
+      id: `${block.task_id}-${block.start}-${index}`,
+      taskId: block.task_id,
+      start: block.start,
+      end: block.end,
+    }))
+    .sort((left, right) => left.start.localeCompare(right.start));
+  const scheduleTasks = tasks.map((task, index) => ({
+    ...task,
+    color: taskColors[index % taskColors.length],
+  }));
+  const taskDetails = new Map(scheduleTasks.map((task) => [task.id, task]));
   const selectedTask = selectedSession
-    ? tasks[selectedSession.taskId]
+    ? taskDetails.get(selectedSession.taskId)
     : null;
 
   const selectedStart = selectedSession
@@ -137,9 +94,13 @@ export function ScheduleOutput() {
   const selectedEnd = selectedSession
     ? new Date(selectedSession.end)
     : null;
+  const firstSession = sessions[0];
+  const weekStart = firstSession ? new Date(firstSession.start) : new Date(0);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
 
   function renderSchedule() {
-    if (previewState === "loading") {
+    if (state === "loading") {
       return (
         <div className="schedule-state">
           <span className="schedule-spinner" />
@@ -152,22 +113,19 @@ export function ScheduleOutput() {
       );
     }
 
-    if (previewState === "empty") {
+    if (state === "empty") {
       return (
         <div className="schedule-state">
           <span className="schedule-state-icon">
             <Icon name="calendar" size={23} />
           </span>
           <h3>No study sessions scheduled</h3>
-          <p>
-            Your weekly schedule is currently empty.
-            Add tasks and availability to get started.
-          </p>
+          <p>{message || "Your weekly schedule is currently empty. Add tasks and availability to get started."}</p>
         </div>
       );
     }
 
-    if (previewState === "infeasible") {
+    if (state === "infeasible") {
       return (
         <div className="schedule-message schedule-warning">
           <span className="schedule-message-icon">
@@ -176,8 +134,7 @@ export function ScheduleOutput() {
           <div>
             <h3>Your workload needs a little more room</h3>
             <p>
-              There isn't enough available time to fit all
-              your tasks before their deadlines.
+              {message || "There is not enough available time to fit all your tasks before their deadlines."}
             </p>
             <p className="schedule-suggestion">
               Try adding more availability or adjusting
@@ -188,17 +145,16 @@ export function ScheduleOutput() {
       );
     }
 
-    if (previewState === "error") {
+    if (state === "error") {
       return (
         <div className="schedule-message schedule-error">
           <span className="schedule-message-icon">
             <Icon name="alert-circle" size={21} />
           </span>
           <div>
-            <h3>We couldn't create your schedule</h3>
+            <h3>We could not create your schedule</h3>
             <p>
-              Something went wrong while preparing your
-              study plan. Please try again.
+              {message || "Something went wrong while preparing your study plan. Please try again."}
             </p>
             <p className="schedule-suggestion">
               Your tasks and availability are still here.
@@ -218,7 +174,7 @@ export function ScheduleOutput() {
             <strong>Schedule passed validation</strong>
             <span>All scheduled sessions fit your available time.</span>
           </div>
-          <span className="schedule-revision">0 revisions</span>
+          <span className="schedule-revision">Planner API</span>
         </div>
 
         <div className="schedule-calendar-scroll">
@@ -254,11 +210,9 @@ export function ScheduleOutput() {
                 weekStart.getDate() + dayIndex
               );
 
-              const daySessions = sessions.filter((session) => {
-                return (
-                  new Date(session.start).getDate() === date.getDate()
-                );
-              });
+              const daySessions = sessions.filter(
+                (session) => new Date(session.start).toDateString() === date.toDateString(),
+              );
 
               return (
                 <div className="schedule-day-column" key={day}>
@@ -276,7 +230,8 @@ export function ScheduleOutput() {
                     {daySessions.map((session) => {
                       const start = new Date(session.start);
                       const end = new Date(session.end);
-                      const task = tasks[session.taskId];
+                      const task = taskDetails.get(session.taskId);
+                      if (!task) return null;
 
                       const minutesFromStart =
                         (start.getHours() - startHour) * 60 +
@@ -333,8 +288,8 @@ export function ScheduleOutput() {
           </div>
 
           <div className="schedule-legend-items">
-            {Object.entries(tasks).map(([id, task]) => (
-              <div className="schedule-legend-item" key={id}>
+            {scheduleTasks.map((task) => (
+              <div className="schedule-legend-item" key={task.id}>
                 <span
                   className="schedule-legend-color"
                   style={{ backgroundColor: task.color }}
@@ -370,26 +325,6 @@ export function ScheduleOutput() {
         </span>
       </header>
 
-      <div className="schedule-preview-controls">
-        <label htmlFor="schedule-preview-state">
-          Preview output state
-        </label>
-        <select
-          className="planner-input schedule-state-select"
-          id="schedule-preview-state"
-          onChange={(event) =>
-            setPreviewState(event.target.value as PreviewState)
-          }
-          value={previewState}
-        >
-          <option value="success">Successful schedule</option>
-          <option value="loading">Loading</option>
-          <option value="empty">Empty schedule</option>
-          <option value="infeasible">Infeasible workload</option>
-          <option value="error">Generation error</option>
-        </select>
-      </div>
-
       {renderSchedule()}
 
       {selectedSession && selectedTask && selectedStart && selectedEnd && (
@@ -424,7 +359,7 @@ export function ScheduleOutput() {
             <div className="schedule-modal-details">
               <div>
                 <span>Course</span>
-                <strong>{selectedTask.course}</strong>
+                <strong>{selectedTask.course || "No course"}</strong>
               </div>
               <div>
                 <span>Date</span>
