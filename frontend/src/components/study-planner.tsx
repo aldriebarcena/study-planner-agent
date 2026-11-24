@@ -3,29 +3,21 @@
 import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/icon";
 import { ScheduleOutput } from "@/components/schedule-output";
+import {
+  isPlannerApiResponse,
+  type PlannerInput,
+  type PlannerPreferences,
+  type PlannerSchedule,
+  type PlannerTask,
+} from "@/planner-types";
 
-export type PlannerTask = {
+type AvailabilityBlock = {
   id: string;
-  name: string;
-  course: string | null;
-  deadline: string;
-  estimated_minutes: number;
-  priority: number;
-};
-
-export type PlannerAvailability = {
   start: string;
   end: string;
 };
 
-type AvailabilityBlock = PlannerAvailability & {
-  id: string;
-};
-
-export type PlannerInput = {
-  tasks: PlannerTask[];
-  availability: PlannerAvailability[];
-};
+type PlanningState = "empty" | "loading" | "success" | "infeasible" | "error";
 
 function formatDuration(minutes: number) {
   const hours = Math.floor(minutes / 60);
@@ -70,11 +62,7 @@ function formatAvailabilityDates(start: string, end: string) {
     : `${formatDate(startDate)} – ${formatDate(endDate)}`;
 }
 
-export function StudyPlanner({
-  onSubmit,
-}: {
-  onSubmit?: (input: PlannerInput) => void;
-}) {
+export function StudyPlanner() {
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [availability, setAvailability] = useState<AvailabilityBlock[]>([]);
   const [taskName, setTaskName] = useState("");
@@ -90,7 +78,23 @@ export function StudyPlanner({
   const [availabilityError, setAvailabilityError] = useState("");
   const [editingAvailabilityId, setEditingAvailabilityId] = useState<string | null>(null);
   const [plannerError, setPlannerError] = useState("");
-  const [submittedInput, setSubmittedInput] = useState<PlannerInput | null>(null);
+  const [studyPeriod, setStudyPeriod] = useState<PlannerPreferences["study_period"]>("any");
+  const [sessionMinutes, setSessionMinutes] = useState("");
+  const [minBreakMinutes, setMinBreakMinutes] = useState("0");
+  const [spreadAcrossDays, setSpreadAcrossDays] = useState(false);
+  const [planningState, setPlanningState] = useState<PlanningState>("empty");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [planningMessage, setPlanningMessage] = useState("");
+  const [schedule, setSchedule] = useState<PlannerSchedule | null>(null);
+  const [scheduledTasks, setScheduledTasks] = useState<PlannerTask[]>([]);
+
+  function clearSchedule() {
+    if (isGenerating) return;
+    setPlanningState("empty");
+    setPlanningMessage("");
+    setSchedule(null);
+    setScheduledTasks([]);
+  }
 
   function addTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,7 +141,7 @@ export function StudyPlanner({
     setTaskPriority("");
     setTaskError("");
     setPlannerError("");
-    setSubmittedInput(null);
+    clearSchedule();
   }
 
   function addAvailability(event: FormEvent<HTMLFormElement>) {
@@ -188,7 +192,7 @@ export function StudyPlanner({
     setEditingAvailabilityId(null);
     setAvailabilityError("");
     setPlannerError("");
-    setSubmittedInput(null);
+    clearSchedule();
   }
 
   function editAvailability(window: AvailabilityBlock) {
@@ -198,7 +202,7 @@ export function StudyPlanner({
     setAvailabilityStart(window.start.slice(11, 16));
     setAvailabilityEnd(window.end.slice(11, 16));
     setAvailabilityError("");
-    setSubmittedInput(null);
+    clearSchedule();
   }
 
   function cancelAvailabilityEdit() {
@@ -210,10 +214,21 @@ export function StudyPlanner({
     setAvailabilityError("");
   }
 
-  function submitPlanner(event: FormEvent<HTMLFormElement>) {
+  async function submitPlanner(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tasks.length || !availability.length) {
       setPlannerError("Add at least one task and one availability window to continue.");
+      return;
+    }
+
+    const sessionLength = sessionMinutes ? Number(sessionMinutes) : null;
+    const minimumBreak = Number(minBreakMinutes);
+    if (sessionLength !== null && (!Number.isSafeInteger(sessionLength) || sessionLength < 1)) {
+      setPlannerError("Session length must be a whole number greater than zero.");
+      return;
+    }
+    if (!Number.isSafeInteger(minimumBreak) || minimumBreak < 0) {
+      setPlannerError("Minimum break must be a whole number of zero or more.");
       return;
     }
 
@@ -227,10 +242,70 @@ export function StudyPlanner({
         priority,
       })),
       availability: availability.map(({ start, end }) => ({ start, end })),
+      preferences: {
+        study_period: studyPeriod,
+        session_minutes: sessionLength,
+        min_break_minutes: minimumBreak,
+        spread_across_days: spreadAcrossDays,
+      },
     };
-    onSubmit?.(input);
-    setSubmittedInput(input);
     setPlannerError("");
+    setPlanningMessage("");
+    setPlanningState("loading");
+    setIsGenerating(true);
+    setSchedule(null);
+    setScheduledTasks(input.tasks);
+
+    try {
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error("The planning API returned an invalid response.");
+      }
+
+      if (!isPlannerApiResponse(body)) {
+        throw new Error("The planning API returned an unexpected response.");
+      }
+      if (body.status === "infeasible") {
+        setPlanningState("infeasible");
+        setPlanningMessage(body.message);
+        setScheduledTasks([]);
+        return;
+      }
+      if (body.status === "error") {
+        throw new Error(body.message);
+      }
+      if (!response.ok) {
+        throw new Error(`The planning API returned HTTP ${response.status}.`);
+      }
+
+      const taskIds = new Set(input.tasks.map((task) => task.id));
+      if (body.schedule.blocks.some((block) => !taskIds.has(block.task_id))) {
+        throw new Error("The planning API returned a session for an unknown task.");
+      }
+
+      setSchedule(body.schedule);
+      setPlanningState(body.schedule.blocks.length ? "success" : "empty");
+      setPlanningMessage(body.schedule.blocks.length ? "" : "The planner returned no study sessions.");
+    } catch (error) {
+      setPlanningState("error");
+      setPlanningMessage(
+        error instanceof TypeError
+          ? "Unable to connect to the planning API. Check that the backend is running and try again."
+          : error instanceof Error
+            ? error.message
+            : "Unable to generate a study schedule.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   const plannedMinutes = tasks.reduce((total, task) => total + task.estimated_minutes, 0);
@@ -249,7 +324,7 @@ export function StudyPlanner({
           <p className="planner-intro">Add your study tasks and available times to build a weekly schedule.</p>
         </section>
 
-        <div className="planner-layout">
+        <fieldset aria-label="Planner input" className="planner-layout planner-fieldset" disabled={isGenerating}>
           <section aria-labelledby="builder-title" className="planner-card builder-card">
             <header className="planner-card-heading">
               <div>
@@ -411,6 +486,80 @@ export function StudyPlanner({
                 </button>
               )}
             </form>
+
+            <section aria-labelledby="preferences-title" className="planner-form-section">
+              <div className="planner-section-heading">
+                <span className="planner-step">03</span>
+                <div><h3 id="preferences-title">Scheduling preferences</h3><p>Guide how the planner fits study sessions into your time.</p></div>
+              </div>
+              <div className="task-details-grid">
+                <label className="planner-field">
+                  <span>Preferred study time</span>
+                  <select
+                    className="planner-input"
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === "morning" || value === "afternoon" || value === "evening" || value === "any") {
+                        setStudyPeriod(value);
+                      }
+                      clearSchedule();
+                    }}
+                    value={studyPeriod}
+                  >
+                    <option value="any">Any time</option>
+                    <option value="morning">Morning</option>
+                    <option value="afternoon">Afternoon</option>
+                    <option value="evening">Evening</option>
+                  </select>
+                </label>
+                <label className="planner-field">
+                  <span>Preferred session length <span className="field-optional">(optional)</span></span>
+                  <div className="planner-input-wrap">
+                    <input
+                      className="planner-input"
+                      min="1"
+                      onChange={(event) => {
+                        setSessionMinutes(event.target.value);
+                        clearSchedule();
+                      }}
+                      step="1"
+                      type="number"
+                      value={sessionMinutes}
+                    />
+                    <span className="input-suffix">minutes</span>
+                  </div>
+                </label>
+                <label className="planner-field">
+                  <span>Minimum break between sessions</span>
+                  <div className="planner-input-wrap">
+                    <input
+                      className="planner-input"
+                      min="0"
+                      onChange={(event) => {
+                        setMinBreakMinutes(event.target.value);
+                        clearSchedule();
+                      }}
+                      required
+                      step="1"
+                      type="number"
+                      value={minBreakMinutes}
+                    />
+                    <span className="input-suffix">minutes</span>
+                  </div>
+                </label>
+                <label className="preference-toggle">
+                  <input
+                    checked={spreadAcrossDays}
+                    onChange={(event) => {
+                      setSpreadAcrossDays(event.target.checked);
+                      clearSchedule();
+                    }}
+                    type="checkbox"
+                  />
+                  <span>Spread study across days when possible</span>
+                </label>
+              </div>
+            </section>
           </section>
 
           <section aria-labelledby="preview-title" className="planner-card preview-card">
@@ -449,7 +598,7 @@ export function StudyPlanner({
                         className="remove-item"
                         onClick={() => {
                           setTasks((current) => current.filter((item) => item.id !== task.id));
-                          setSubmittedInput(null);
+                          clearSchedule();
                         }}
                         type="button"
                       >Remove</button>
@@ -487,7 +636,7 @@ export function StudyPlanner({
                         onClick={() => {
                           setAvailability((current) => current.filter((item) => item.id !== window.id));
                           if (editingAvailabilityId === window.id) cancelAvailabilityEdit();
-                          setSubmittedInput(null);
+                          clearSchedule();
                         }}
                         type="button"
                       >Remove</button>
@@ -499,28 +648,24 @@ export function StudyPlanner({
               )}
             </section>
           </section>
-        </div>
+        </fieldset>
 
         <form className="planner-submit-section" onSubmit={submitPlanner}>
           {plannerError && <p className="planner-error" role="alert">{plannerError}</p>}
-          <button className="planner-button planner-submit-button" type="submit">
-            Prepare planner input
+          <button className="planner-button planner-submit-button" disabled={isGenerating} type="submit">
+            {isGenerating ? "Generating schedule…" : "Generate schedule"}
           </button>
-          {submittedInput && (
-            <div aria-live="polite" className="submitted-input">
-              <p>Planner input is ready.</p>
-              <details>
-                <summary>View Phase 1 request data</summary>
-                <pre>{JSON.stringify(submittedInput, null, 2)}</pre>
-              </details>
-            </div>
-          )}
         </form>
 
-        <ScheduleOutput />
+        <ScheduleOutput
+          message={planningMessage}
+          schedule={schedule}
+          state={planningState}
+          tasks={scheduledTasks}
+        />
 
         <footer className="planner-footer">
-          <span>This form prepares planner input without making API requests.</span>
+          <span>Your plan is sent to the planner API through the app server.</span>
         </footer>
       </main>
     </div>
