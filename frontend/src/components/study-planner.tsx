@@ -275,7 +275,7 @@ export function StudyPlanner() {
       }
       if (body.status === "infeasible") {
         setPlanningState("infeasible");
-        setPlanningMessage(body.message);
+        setPlanningMessage("There isn't enough available study time to complete all your tasks before their deadlines.");
         setScheduledTasks([]);
         return;
       }
@@ -662,6 +662,7 @@ export function StudyPlanner() {
           schedule={schedule}
           state={planningState}
           tasks={scheduledTasks}
+          availability={availability}
         />
       </main>
     </div>

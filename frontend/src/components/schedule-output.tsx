@@ -13,11 +13,18 @@ type StudySession = {
   end: string;
 };
 
+type AvailabilityBlock = {
+  id: string;
+  start: string;
+  end: string;
+};
+
 type ScheduleOutputProps = {
   state: PreviewState;
   schedule: PlannerSchedule | null;
   tasks: PlannerTask[];
   message: string;
+  availability: AvailabilityBlock[];
 };
 
 const weekdays = [
@@ -52,7 +59,7 @@ function formatDuration(start: Date, end: Date) {
   return `${remainingMinutes}m`;
 }
 
-export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutputProps) {
+export function ScheduleOutput({ state, schedule, tasks, message, availability }: ScheduleOutputProps) {
   const [selectedSession, setSelectedSession] =
     useState<StudySession | null>(null);
 
@@ -230,6 +237,44 @@ export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutp
                   </div>
 
                   <div className="schedule-day-timeline">
+                    {availability.map((window) => {
+                    const windowStart = new Date(window.start);
+                    const windowEnd = new Date(window.end);
+
+                    const dayStart = new Date(date);
+                    dayStart.setHours(startHour, 0, 0, 0);
+
+                    const dayEnd = new Date(date);
+                    dayEnd.setHours(endHour, 0, 0, 0);
+
+                    const visibleStart = new Date(
+                      Math.max(windowStart.getTime(), dayStart.getTime())
+                    );
+
+                    const visibleEnd = new Date(
+                      Math.min(windowEnd.getTime(), dayEnd.getTime())
+                    );
+
+                    if (visibleEnd <= visibleStart) return null;
+
+                    const minutesFromStart =
+                      (visibleStart.getTime() - dayStart.getTime()) / 60000;
+
+                    const duration =
+                      (visibleEnd.getTime() - visibleStart.getTime()) / 60000;
+
+                    return (
+                      <div
+                        className="schedule-availability-block"
+                        key={`${window.id}-${dayIndex}`}
+                        style={{
+                          top: `${(minutesFromStart / 60) * hourHeight}px`,
+                          height: `${(duration / 60) * hourHeight}px`,
+                        }}
+                      >
+                      </div>
+                    );
+                  })}
                     {daySessions.map((session) => {
                       const start = new Date(session.start);
                       const end = new Date(session.end);
@@ -289,7 +334,16 @@ export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutp
             <h3>Task legend</h3>
             <span>Color-coded by task</span>
           </div>
-
+          <div className="schedule-legend-item">
+            <span
+              className="schedule-legend-color"
+              style={{ backgroundColor: "rgba(34, 197, 94, 0.35)" }}
+            />
+            <span>
+              <strong>Available time</strong>
+              <small>Open study windows</small>
+            </span>
+          </div>
           <div className="schedule-legend-items">
             {scheduleTasks.map((task) => (
               <div className="schedule-legend-item" key={task.id}>
