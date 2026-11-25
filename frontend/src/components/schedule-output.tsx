@@ -31,8 +31,8 @@ const weekdays = [
 ];
 
 const taskColors = ["#dceafa", "#fce4d6", "#e4f1df", "#ede0f5", "#f7e9c9"];
-const startHour = 8;
-const endHour = 20;
+const startHour = 0;
+const endHour = 24;
 const hourHeight = 48;
 
 function formatTime(date: Date) {
@@ -191,7 +191,10 @@ export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutp
                     return (
                       <span
                         key={hour}
-                        style={{ top: index * hourHeight }}
+                        style={{
+                          top: index * hourHeight,
+                          transform: index === 0 ? "translateY(0)" : "translateY(-50%)",
+                        }}
                       >
                         {label.toLocaleTimeString("en-US", {
                           hour: "numeric",
@@ -360,6 +363,19 @@ export function ScheduleOutput({ state, schedule, tasks, message }: ScheduleOutp
               <div>
                 <span>Course</span>
                 <strong>{selectedTask.course || "No course"}</strong>
+              </div>
+              <div>
+                <span>Deadline</span>
+                <strong>
+                  {new Date(selectedTask.deadline).toLocaleString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </strong>
               </div>
               <div>
                 <span>Date</span>

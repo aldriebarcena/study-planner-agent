@@ -948,7 +948,7 @@ select:focus-visible {
 
 .schedule-time-labels {
   position: relative;
-  height: 576px;
+  height: 1152px;
 }
 
 .schedule-time-labels span {
@@ -973,7 +973,7 @@ select:focus-visible {
 
 .schedule-day-timeline {
   position: relative;
-  height: 576px;
+  height: 1152px;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,

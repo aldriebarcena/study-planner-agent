@@ -663,10 +663,6 @@ export function StudyPlanner() {
           state={planningState}
           tasks={scheduledTasks}
         />
-
-        <footer className="planner-footer">
-          <span>Your plan is sent to the planner API through the app server.</span>
-        </footer>
       </main>
     </div>
   );
