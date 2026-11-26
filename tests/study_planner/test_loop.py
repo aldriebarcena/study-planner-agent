@@ -3,10 +3,13 @@ import json
 import pytest
 
 from study_planner.input import load_planner_input
+
 from study_planner.loop import (
     run_planner,
+    run_planner_with_metadata,
     run_planning_loop,
 )
+
 from study_planner.schemas import SchedulingPreferences
 
 VALID_SCHEDULE = json.dumps(
@@ -233,3 +236,82 @@ def test_structured_loop_preserves_event_tracking():
     )
 
     assert "validator_failure" in events
+
+def test_planner_metadata_for_first_attempt_success():
+    tasks, availability = load_planner_input(
+        "eval_cases/simple_week.json"
+    )
+
+    def generate(prompt):
+        return VALID_SCHEDULE
+
+    result = run_planner_with_metadata(
+        tasks,
+        availability,
+        generate,
+    )
+
+    assert result.metadata.attempts == 1
+    assert result.metadata.revisions == 0
+    assert result.metadata.validator_failures == 0
+    assert result.metadata.format_failures == 0
+
+def test_planner_metadata_tracks_validator_revision():
+    tasks, availability = load_planner_input(
+        "eval_cases/simple_week.json"
+    )
+
+    invalid_schedule = json.dumps(
+        {
+            "blocks": [
+                {
+                    "task_id": "cs_midterm",
+                    "start": "2026-10-26T14:00:00",
+                    "end": "2026-10-26T15:00:00",
+                }
+            ]
+        }
+    )
+
+    responses = [
+        invalid_schedule,
+        VALID_SCHEDULE,
+    ]
+
+    def generate(prompt):
+        return responses.pop(0)
+
+    result = run_planner_with_metadata(
+        tasks,
+        availability,
+        generate,
+    )
+
+    assert result.metadata.attempts == 2
+    assert result.metadata.revisions == 1
+    assert result.metadata.validator_failures >= 1
+    assert result.metadata.format_failures == 0
+
+def test_planner_metadata_tracks_format_failure():
+    tasks, availability = load_planner_input(
+        "eval_cases/simple_week.json"
+    )
+
+    responses = [
+        "not valid json",
+        VALID_SCHEDULE,
+    ]
+
+    def generate(prompt):
+        return responses.pop(0)
+
+    result = run_planner_with_metadata(
+        tasks,
+        availability,
+        generate,
+    )
+
+    assert result.metadata.attempts == 2
+    assert result.metadata.revisions == 1
+    assert result.metadata.format_failures == 1
+    assert result.metadata.validator_failures == 0

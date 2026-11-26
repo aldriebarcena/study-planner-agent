@@ -6,7 +6,15 @@ from study_planner.agent import (
 )
 from study_planner.input import load_planner_input, load_preferences
 from study_planner.output import parse_schedule
-from study_planner.schemas import AvailabilityBlock, Schedule, SchedulingPreferences, Task, ValidationResult
+from study_planner.schemas import (
+    AvailabilityBlock,
+    PlannerExecutionMetadata,
+    PlannerResult,
+    Schedule,
+    SchedulingPreferences,
+    Task,
+    ValidationResult,
+)
 from study_planner.tools.availability import validate_availability
 from study_planner.tools.completion import validate_completion
 from study_planner.tools.deadlines import validate_deadlines
@@ -67,6 +75,28 @@ def run_planner(
     record_event: RecordEvent | None = None,
     preferences: SchedulingPreferences | None = None,
 ) -> Schedule:
+    result = run_planner_with_metadata(
+        tasks,
+        availability,
+        generate,
+        max_iterations=max_iterations,
+        record_event=record_event,
+        preferences=preferences,
+    )
+
+    return result.schedule
+
+
+def run_planner_with_metadata(
+    tasks: list[Task],
+    availability: list[AvailabilityBlock],
+    generate: GenerateSchedule,
+    max_iterations: int = 5,
+    record_event: RecordEvent | None = None,
+    preferences: SchedulingPreferences | None = None,
+) -> PlannerResult:
+    metadata = PlannerExecutionMetadata()
+
     workload_result = validate_workload(
         tasks,
         availability,
@@ -75,7 +105,9 @@ def run_planner(
     if not workload_result.valid:
         feedback = format_validation_feedback([workload_result])
 
-        raise ValueError(f"Study plan is infeasible:\n{feedback}")
+        raise ValueError(
+            f"Study plan is infeasible:\n{feedback}"
+        )
 
     initial_prompt = build_agent_prompt_from_data(
         tasks,
@@ -86,12 +118,16 @@ def run_planner(
     prompt = initial_prompt
 
     for _ in range(max_iterations):
+        metadata.attempts += 1
+
         raw_output = generate(prompt)
 
         try:
             schedule = parse_schedule(raw_output)
 
         except ValueError as exc:
+            metadata.format_failures += 1
+
             if record_event:
                 record_event("format_failure")
 
@@ -112,15 +148,27 @@ def run_planner(
             availability,
         )
 
-        if record_event:
-            for result in validation_results:
-                if not result.valid:
+        for result in validation_results:
+            if not result.valid:
+                metadata.validator_failures += 1
+
+                if record_event:
                     record_event("validator_failure")
 
         if all(result.valid for result in validation_results):
-            return schedule
+            metadata.revisions = max(
+                0,
+                metadata.attempts - 1,
+            )
 
-        feedback = format_validation_feedback(validation_results)
+            return PlannerResult(
+                schedule=schedule,
+                metadata=metadata,
+            )
+
+        feedback = format_validation_feedback(
+            validation_results
+        )
 
         prompt = (
             f"{initial_prompt}\n\n"
@@ -131,4 +179,12 @@ def run_planner(
             "error and return the corrected schedule."
         )
 
-    raise RuntimeError(f"Unable to produce a valid schedule within {max_iterations} iterations")
+    metadata.revisions = max(
+        0,
+        metadata.attempts - 1,
+    )
+
+    raise RuntimeError(
+        "Unable to produce a valid schedule within "
+        f"{max_iterations} iterations"
+    )

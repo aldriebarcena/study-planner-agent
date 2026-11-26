@@ -7,7 +7,7 @@ from study_planner.api.schemas import (
     PlanRequest,
     PlanSuccessResponse,
 )
-from study_planner.loop import run_planner
+from study_planner.loop import run_planner_with_metadata
 from study_planner.model import generate_schedule
 
 app = FastAPI(
@@ -39,14 +39,17 @@ def create_plan(
     request: PlanRequest,
 ):
     try:
-        schedule = run_planner(
+      result = run_planner_with_metadata(
           request.tasks,
           request.availability,
           generate_schedule,
           preferences=request.preferences,
-        )
+      )
 
-        return PlanSuccessResponse(schedule=schedule)
+      return PlanSuccessResponse(
+          schedule=result.schedule,
+          metadata=result.metadata,
+      )
 
     except ValueError as exc:
         message = str(exc)

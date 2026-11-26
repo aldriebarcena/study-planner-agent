@@ -74,6 +74,13 @@ def test_plan_endpoint_returns_schedule(
 
     assert body["schedule"]["blocks"][0]["task_id"] == "cs_midterm"
 
+    assert body["metadata"] == {
+      "attempts": 1,
+      "revisions": 0,
+      "validator_failures": 0,
+      "format_failures": 0,
+    }
+
 
 def test_plan_endpoint_reports_infeasible(
     monkeypatch,
@@ -199,3 +206,46 @@ def test_plan_endpoint_uses_default_preferences(
 
     assert response.status_code == 200
     assert '"study_period": "any"' in prompts[0]
+
+def test_plan_endpoint_reports_revision_metadata(
+    monkeypatch,
+):
+    invalid_schedule = json.dumps(
+        {
+            "blocks": [
+                {
+                    "task_id": "cs_midterm",
+                    "start": "2026-10-26T14:00:00",
+                    "end": "2026-10-26T15:00:00",
+                }
+            ]
+        }
+    )
+
+    responses = [
+        invalid_schedule,
+        VALID_SCHEDULE,
+    ]
+
+    def generate(prompt):
+        return responses.pop(0)
+
+    monkeypatch.setattr(
+        app_module,
+        "generate_schedule",
+        generate,
+    )
+
+    response = client.post(
+        "/api/plan",
+        json=SIMPLE_REQUEST,
+    )
+
+    assert response.status_code == 200
+
+    metadata = response.json()["metadata"]
+
+    assert metadata["attempts"] == 2
+    assert metadata["revisions"] == 1
+    assert metadata["validator_failures"] >= 1
+    assert metadata["format_failures"] == 0
