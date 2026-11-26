@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from study_planner.schemas import (
     AvailabilityBlock,
+    PlannerExecutionMetadata,
     Schedule,
     SchedulingPreferences,
     Task,
@@ -21,6 +22,7 @@ class PlanRequest(BaseModel):
 class PlanSuccessResponse(BaseModel):
     status: Literal["success"] = "success"
     schedule: Schedule
+    metadata: PlannerExecutionMetadata
 
 
 class PlanInfeasibleResponse(BaseModel):
